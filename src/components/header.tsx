@@ -10,6 +10,7 @@ import { requestShowDownloadManager } from './download-manager';
 import { Icon } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
+import { useAuth } from './auth';
 
 /** 顶部导航：Logo、搜索框（首页外）、历史、设置 */
 export function Header({ showSearch = false }: { showSearch?: boolean }) {
@@ -20,6 +21,7 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
   const [query, setQuery] = useState('');
   // 与首页搜索框共用同一套「最近搜索」下拉逻辑
   const searchHistory = useSearchHistory(query);
+  const { authMode, user, verified, openLogin, logout } = useAuth();
 
   const submitSearch = (text: string) => {
     const q = text.trim().slice(0, 100);
@@ -97,6 +99,7 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
           <div className="flex-1 sm:hidden" />
 
           <nav className="flex items-center gap-1 ml-auto">
+            {authMode === 'accounts' && verified && user?.role === 'admin' && <HeaderLink href="/admin" active={pathname === '/admin'}>管理</HeaderLink>}
             <HeaderLink href="/live" active={pathname === '/live'}>
               直播
             </HeaderLink>
@@ -113,6 +116,9 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
             <IconButton label="设置" onClick={() => setSettingsOpen(true)}>
               <Icon name="gear" />
             </IconButton>
+            {authMode === 'accounts' && (verified
+              ? <button className="px-2.5 py-1.5 rounded-md text-sm text-muted hover:text-content" onClick={() => void logout()} title="退出登录">{user?.username ?? '账号'} · 退出</button>
+              : <button className="px-2.5 py-1.5 rounded-md text-sm text-muted hover:text-content" onClick={openLogin}>登录 / 注册</button>)}
           </nav>
         </div>
       </header>

@@ -91,6 +91,9 @@ export interface BangumiCalendarResponse {
 }
 
 export interface AuthStatusResponse {
+  authMode?: 'password' | 'accounts';
+  setupRequired?: boolean;
+  user?: { id: string; username: string; role: 'admin' | 'user' } | null;
   /** 服务器是否配置了 PASSWORD */
   passwordRequired: boolean;
   /** 当前会话是否已验证 */

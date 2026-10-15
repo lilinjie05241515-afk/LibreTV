@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE, checkRateLimit, sessionFromCookieHeader, signSession, checkPassword, clearRateLimit, isPasswordConfigured } from '@/lib/auth';
+import { accountsMode, sessionUser } from '@/lib/account-service';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  if (accountsMode()) return NextResponse.json({ success: false, error: '请使用个人账号登录' }, { status: 410 });
   if (!isPasswordConfigured()) {
     return NextResponse.json(
       { success: false, error: '服务器未设置 PASSWORD 环境变量，请联系管理员配置' },
@@ -53,12 +55,14 @@ export async function POST(req: Request) {
 
 /** GET：查询当前会话状态 */
 export async function GET(req: Request) {
+  if (accountsMode()) return NextResponse.json({ success: true, verified: !!sessionUser(req.headers.get('cookie')) });
   const verified = sessionFromCookieHeader(req.headers.get('cookie'));
   return NextResponse.json({ success: true, verified });
 }
 
 /** DELETE：登出 */
 export async function DELETE() {
+  if (accountsMode()) return NextResponse.json({ success: false, error: '请使用账号退出接口' }, { status: 410 });
   const res = NextResponse.json({ success: true });
   res.cookies.set(SESSION_COOKIE, '', { httpOnly: true, maxAge: 0, path: '/' });
   return res;

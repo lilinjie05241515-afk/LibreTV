@@ -6,6 +6,7 @@ import { api, onUnauthorized, STATUS_QUERY_KEY } from '@/lib/client-api';
 import { applyEnvPresets } from '@/lib/subscription-sync';
 import type { AuthStatusResponse } from '@/lib/types';
 import { useToast } from './toast';
+import { AccountModal } from './account-modal';
 
 /**
  * 认证上下文：
@@ -22,6 +23,8 @@ interface AuthContextValue {
   setupRequired: SetupRequired;
   /** /api/status 返回的应用版本（构建时从 package.json 注入） */
   version: string | null;
+  authMode: 'password' | 'accounts';
+  user: AuthStatusResponse['user'];
   openLogin: () => void;
   logout: () => Promise<void>;
 }
@@ -31,6 +34,8 @@ const AuthContext = createContext<AuthContextValue>({
   verified: false,
   setupRequired: false,
   version: null,
+  authMode: 'password',
+  user: null,
   openLogin: () => {},
   logout: async () => {},
 });
@@ -44,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [verified, setVerified] = useState(false);
   const [setupRequired, setSetupRequired] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<'password' | 'accounts'>('password');
+  const [user, setUser] = useState<AuthStatusResponse['user']>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -56,8 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((s) => {
         if (cancelled) return;
         setVerified(s.verified);
-        setSetupRequired(!s.passwordRequired);
+        setAuthMode(s.authMode ?? 'password');
+        setUser(s.user ?? null);
+        setSetupRequired(s.authMode === 'accounts' ? !!s.setupRequired : !s.passwordRequired);
         setVersion(s.version);
+        if (s.authMode === 'accounts' && !s.verified) setModalOpen(true);
         setChecked(true);
       })
       .catch(() => {
@@ -83,31 +93,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await api.logout();
+      if (authMode === 'accounts') await api.accountLogout();
+      else await api.logout();
     } finally {
       setVerified(false);
+      setUser(null);
+      queryClient.invalidateQueries({ queryKey: STATUS_QUERY_KEY });
       toast('已退出登录', 'info');
     }
-  }, [toast]);
+  }, [toast, authMode, queryClient]);
 
   const handleLoginSuccess = useCallback(async () => {
     setVerified(true);
     setSetupRequired(false);
     setModalOpen(false);
     // 登录前以 401 失败的查询（如豆瓣推荐）需要重新拉取
-    queryClient.invalidateQueries();
+    await queryClient.invalidateQueries();
     toast('验证成功', 'success');
     // 预置订阅（DEFAULT_SUBSCRIPTIONS）的首屏同步发生在登录之前，会 401 静默失败，
     // 这里用缓存中的 /api/status 补跑一次（缓存缺失时回落为一次请求）
     try {
-      const cached = queryClient.getQueryData<AuthStatusResponse>(STATUS_QUERY_KEY);
-      const status =
-        cached ??
-        (await queryClient.fetchQuery<AuthStatusResponse>({
-          queryKey: STATUS_QUERY_KEY,
-          queryFn: () => api.status(),
-          staleTime: 0,
-        }));
+      const status = await queryClient.fetchQuery<AuthStatusResponse>({
+        queryKey: STATUS_QUERY_KEY, queryFn: () => api.status(), staleTime: 0,
+      });
+      setUser(status.user ?? null);
+      setAuthMode(status.authMode ?? 'password');
       if (status) await applyEnvPresets(status);
     } catch {
       // 补拉预置数据失败不影响登录后的正常使用
@@ -115,14 +125,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [toast, queryClient]);
 
   return (
-    <AuthContext.Provider value={{ checked, verified, setupRequired, version, openLogin, logout }}>
+    <AuthContext.Provider value={{ checked, verified, setupRequired, version, authMode, user, openLogin, logout }}>
       {children}
       {modalOpen && (
-        <LoginModal
-          setupRequired={setupRequired}
-          onSuccess={handleLoginSuccess}
-          onClose={() => setModalOpen(false)}
-        />
+        authMode === 'accounts'
+          ? <AccountModal setupRequired={setupRequired} onSuccess={handleLoginSuccess} onClose={() => setModalOpen(false)} />
+          : <LoginModal setupRequired={setupRequired} onSuccess={handleLoginSuccess} onClose={() => setModalOpen(false)} />
       )}
     </AuthContext.Provider>
   );

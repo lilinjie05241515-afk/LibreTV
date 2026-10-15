@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isPasswordConfigured, sessionFromCookieHeader } from '@/lib/auth';
+import { accountsMode, hasAdmin, sessionUser } from '@/lib/account-service';
 import { getEnvSources } from '@/lib/env-sources';
 import { getEnvLiveSources } from '@/lib/env-live-sources';
 import { getEnvSubscriptions } from '@/lib/env-subscriptions';
@@ -10,9 +11,15 @@ export const runtime = 'nodejs';
 
 /** 站点状态：客户端据此决定是否弹出登录框 / 提示管理员配置密码，并获取预置采集站与预置直播源 */
 export async function GET(req: Request) {
-  const passwordRequired = isPasswordConfigured();
-  const verified = passwordRequired && sessionFromCookieHeader(req.headers.get('cookie'));
+  const accountMode = accountsMode();
+  const passwordRequired = accountMode || isPasswordConfigured();
+  const setupRequired = accountMode && !hasAdmin();
+  const user = accountMode ? sessionUser(req.headers.get('cookie')) : null;
+  const verified = accountMode ? !!user : passwordRequired && sessionFromCookieHeader(req.headers.get('cookie'));
   return NextResponse.json({
+    authMode: accountMode ? 'accounts' : 'password',
+    setupRequired,
+    user,
     passwordRequired,
     verified,
     // 构建时由 next.config.ts 从 package.json 注入
@@ -27,5 +34,5 @@ export async function GET(req: Request) {
     defaultRecommendSource: getEnvRecommendSource() ?? null,
     // 部署者通过 DEFAULT_IMAGE_MODE 指定的封面图加载方式默认值（未配置时为 null）
     defaultImageMode: getEnvImageMode() ?? null,
-  });
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }

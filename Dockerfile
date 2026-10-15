@@ -21,10 +21,13 @@ ENV HOSTNAME=0.0.0.0
 
 # 非 root 用户
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder /app/node_modules/argon2 ./node_modules/argon2
 
 USER nextjs
 

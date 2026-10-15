@@ -9,11 +9,18 @@ services:
     container_name: libretv
     restart: unless-stopped
     ports:
-      - "8080:8080"
-    # 无状态服务：观看历史在浏览器 IndexedDB、设置在 localStorage，无需挂载卷
+      - "127.0.0.1:8080:8080"
+    # 账号模式将 SQLite 数据保存于卷中；观看历史仍在浏览器 IndexedDB。
+    volumes:
+      - libretv-data:/app/data
     environment:
-      # 必填：访问密码（在 .env 中设置，缺失时 compose 启动即报错提醒）
-      - PASSWORD=${PASSWORD:?请在 .env 中设置 PASSWORD}
+      # AUTH_MODE=accounts 时启用邀请码注册并停用旧共享密码入口。
+      - AUTH_MODE=${AUTH_MODE:-password}
+      - PASSWORD=${PASSWORD:-}
+      - PUBLIC_ORIGIN=${PUBLIC_ORIGIN:-}
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN:-}
+      - BOOTSTRAP_TOKEN_EXPIRES_AT=${BOOTSTRAP_TOKEN_EXPIRES_AT:-}
+      - LIBRETV_DB_PATH=/app/data/accounts.sqlite
       # 可选：会话/代理签名密钥（多实例部署建议显式设置：openssl rand -hex 32）
       # - PROXY_SECRET=your-secret
       # 可选：Cookie Secure 策略覆盖（true=强制开启 / false=强制关闭；不设置时按请求协议自动推导，HTTP 部署无需配置）
@@ -39,3 +46,6 @@ services:
       # - USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36
       # 可选：影视榜单推荐源（60s API）实例地址，官方公共实例有限流
       # - 60S_API_BASE=https://60s.crystelf.top
+
+volumes:
+  libretv-data:

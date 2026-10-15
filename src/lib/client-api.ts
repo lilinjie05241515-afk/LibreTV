@@ -117,6 +117,30 @@ export const api = {
 
   logout: () => request<{ success: boolean }>('/api/auth', { method: 'DELETE' }),
 
+  accountLogin: (username: string, password: string) => request<{ user: { id: string; username: string; role: 'admin' | 'user' } }>('/api/account/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }),
+  }),
+  accountRegister: (username: string, password: string, invite: string) => request<{ user: { id: string; username: string; role: 'admin' | 'user' } }>('/api/account/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, invite }),
+  }),
+  accountBootstrap: (username: string, password: string, token: string) => request<{ user: { id: string; username: string; role: 'admin' | 'user' } }>('/api/account/bootstrap', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, token }),
+  }),
+  accountReset: (token: string, password: string) => request<{ success: boolean }>('/api/account/reset', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password }),
+  }),
+  accountLogout: () => request<{ success: boolean }>('/api/account/logout', { method: 'POST' }),
+  adminInvites: () => request<{ invites: Array<{ id: string; created_at: number; expires_at: number; used_at: number | null; revoked_at: number | null; used_by: string | null; note: string }> }>('/api/admin/invites'),
+  adminCreateInvites: (count: number, days: number, note: string) => request<{ codes: string[] }>('/api/admin/invites', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count, days, note }),
+  }),
+  adminRevokeInvite: (id: string) => request<{ success: boolean }>(`/api/admin/invites/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  adminUsers: () => request<{ users: Array<{ id: string; username: string; role: 'admin' | 'user'; status: 'active' | 'disabled'; created_at: number }> }>('/api/admin/users'),
+  adminSetUserStatus: (id: string, status: 'active' | 'disabled') => request<{ success: boolean }>(`/api/admin/users/${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+  }),
+  adminCreateReset: (id: string) => request<{ token: string }>(`/api/admin/users/${encodeURIComponent(id)}/reset`, { method: 'POST' }),
+
   /**
    * 聚合搜索。传入 onSource 时走 /api/search?stream=1 的 NDJSON 流：
    * 每个源结算立即回调（健康源结果不再等坏源超时），最终以聚合结果 resolve。
