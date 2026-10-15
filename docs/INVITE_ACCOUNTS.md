@@ -18,6 +18,8 @@ LIBRETV_DB_PATH=/app/data/accounts.sqlite
 
 当前 Dockerfile 运行用户是 `nextjs`。自定义 Compose 或 bind mount 须确保 `/app/data` 对该用户可写。Caddy 仍将外部 HTTPS 转发到容器内部 8080；生产环境的端口映射宜绑定 `127.0.0.1`。
 
+中国内地服务器若访问 Alpine 官方仓库较慢，可在构建时传入 `--build-arg APK_MIRROR=mirrors.aliyun.com`，仅替换构建阶段的 Alpine 包仓库；默认仍使用官方仓库。
+
 ## 使用
 
 - 管理员登录后从页面顶部“管理”进入 `/admin`，可批量生成最多 20 个邀请码，设置 1–30 天有效期。邀请码只显示一次，数据库仅存哈希。

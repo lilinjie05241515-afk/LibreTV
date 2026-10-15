@@ -1,6 +1,8 @@
 # ---- 构建阶段 ----
 FROM node:22-alpine AS builder
-RUN apk add --no-cache python3 make g++
+ARG APK_MIRROR=
+RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#dl-cdn.alpinelinux.org#$APK_MIRROR#g" /etc/apk/repositories; fi \
+    && apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
