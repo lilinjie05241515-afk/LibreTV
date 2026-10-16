@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload } from './types';
+import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, CategoryListResponse, BrowseResponse } from './types';
 
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
@@ -107,6 +107,18 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   status: () => request<AuthStatusResponse>('/api/status'),
+
+  categories: (source: SourceConfig, filterAdult: boolean, signal?: AbortSignal) => {
+    const sp = new URLSearchParams({ source: JSON.stringify(source), filterAdult: filterAdult ? '1' : '0' });
+    return request<CategoryListResponse>(`/api/categories?${sp.toString()}`, { signal });
+  },
+
+  browse: (source: SourceConfig, type: string, page: number, filterAdult: boolean, signal?: AbortSignal) => {
+    const sp = new URLSearchParams({
+      source: JSON.stringify(source), type, page: String(page), filterAdult: filterAdult ? '1' : '0',
+    });
+    return request<BrowseResponse>(`/api/browse?${sp.toString()}`, { signal });
+  },
 
   login: (password: string) =>
     request<{ success: boolean }>('/api/auth', {

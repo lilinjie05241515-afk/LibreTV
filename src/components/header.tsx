@@ -100,6 +100,7 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
 
           <nav className="flex items-center gap-1 ml-auto">
             {authMode === 'accounts' && verified && user?.role === 'admin' && <HeaderLink href="/admin" active={pathname === '/admin'}>管理</HeaderLink>}
+            <HeaderLink href="/browse" active={pathname === '/browse'}>分类</HeaderLink>
             <HeaderLink href="/live" active={pathname === '/live'}>
               直播
             </HeaderLink>

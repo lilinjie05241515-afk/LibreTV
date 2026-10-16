@@ -25,6 +25,24 @@ export interface SearchResultItem {
   isAdult?: boolean;
 }
 
+/** Apple CMS 源站提供的分类；ID 只在该源站内有意义。 */
+export interface CmsCategory {
+  id: string;
+  parentId: string;
+  name: string;
+}
+
+export interface CategoryListResponse {
+  categories: CmsCategory[];
+}
+
+export interface BrowseResponse {
+  list: SearchResultItem[];
+  page: number;
+  pageCount: number;
+  total: number;
+}
+
 export interface VideoInfo {
   title?: string;
   cover?: string;
