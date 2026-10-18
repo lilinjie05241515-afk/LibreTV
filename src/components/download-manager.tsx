@@ -63,7 +63,7 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
       const abort = new AbortController();
       const pause = new PauseResumeController();
       running.current.set(entry.id, { abort, pause });
-      await updateEntry(entry.id, { status: 'downloading' });
+      await updateEntry(entry.id, { status: 'downloading', errorMessage: undefined });
 
       const onProgress = (p: DownloadProgress) => {
         void updateEntry(entry.id, {
@@ -93,7 +93,11 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
         .catch(async (err: Error) => {
           if (abort.signal.aborted) return; // 用户取消：状态已在取消处理里写好
           try { await target.abort(); } catch { /* 保留原始下载错误 */ }
-          await updateEntry(entry.id, { status: 'error' });
+          await updateEntry(entry.id, {
+            status: 'error',
+            errorNum: entry.errorNum + 1,
+            errorMessage: err.message,
+          });
           toast(`《${entry.title}》下载失败：${err.message}`, 'error');
         })
         .finally(() => {
@@ -171,7 +175,7 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
   // 抽屉打开时：刷新保存能力与任务列表，并启动排队中的任务
   useEffect(() => {
     // 页面刷新会丢失文件句柄；旧「下载中」任务需显式等待重新选择。
-    void db.downloads.where('status').equals('downloading').modify({ status: 'paused' }).then(refresh);
+    void db.downloads.filter((task) => task.status === 'downloading').modify({ status: 'paused' }).then(refresh);
   }, [refresh]);
 
   useEffect(() => {
@@ -198,7 +202,7 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
       try {
         const target = await pickSaveTarget(`${entry.title}.${entry.format.toLowerCase()}`);
         targets.current.set(entry.id, target);
-        await updateEntry(entry.id, { status: 'waiting' });
+        await updateEntry(entry.id, { status: 'waiting', errorMessage: undefined });
         scheduleNext();
       } catch (err) {
         if (err instanceof UserCancelledError) toast('已取消', 'info');
@@ -257,6 +261,9 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
                   {t.format.toUpperCase()} · {statusLabel[t.status]}
                   {t.status === 'downloading' && t.total > 0 ? ` · ${t.finished}/${t.total} 分片` : ''}
                 </p>
+                {t.status === 'error' && t.errorMessage && (
+                  <p className="text-xs text-red-400 break-words">{t.errorMessage}</p>
+                )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {t.status === 'downloading' && (

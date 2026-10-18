@@ -66,6 +66,8 @@ export interface DownloadTaskEntry {
   finished: number;
   total: number;
   errorNum: number;
+  /** 最近一次失败原因，供用户在下载管理中查看 */
+  errorMessage?: string;
   createdAt: number;
   updatedAt: number;
 }
