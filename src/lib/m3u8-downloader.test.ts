@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decryptSegment } from './m3u8-downloader';
+import { decryptSegment, downloadProxyUrl, PauseResumeController, runDownloadJob } from './m3u8-downloader';
 import { parseM3u8Playlist } from './m3u8-parse';
 
 const KEY = crypto.getRandomValues(new Uint8Array(16));
@@ -88,5 +88,50 @@ describe('parseM3u8Playlist · mediaSequence 与 AES URI 绝对化', () => {
     );
     const parsed = await parseM3u8Playlist('https://cdn.example.com/a.m3u8');
     expect(parsed.mediaSequence).toBe(0);
+  });
+});
+
+describe('下载同源代理', () => {
+  it('源站清单经代理请求，代理改写的分片经同源请求并写入文件', async () => {
+    const upstream = 'https://media.example.com/episode.m3u8?token=a%2Fb';
+    const playlist = '#EXTM3U\n#EXTINF:4,\n/api/proxy?url=https%3A%2F%2Fmedia.example.com%2Fpart.ts\n';
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      calls.push(url);
+      if (url.includes('episode.m3u8')) return new Response(playlist);
+      if (url.includes('part.ts')) return new Response(new Uint8Array([1, 2, 3]));
+      return new Response(null, { status: 404 });
+    }));
+    const entries = new Map<string, Response>();
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async (req: Request) => entries.get(req.url)?.clone(),
+        put: async (req: Request, res: Response) => { entries.set(req.url, res.clone()); },
+      }),
+    });
+    const written: number[] = [];
+    let closed = false;
+    await runDownloadJob({
+      taskId: 'proxy-test',
+      url: upstream,
+      title: 'test',
+      format: 'TS',
+      concurrency: 1,
+      signal: new AbortController().signal,
+      pause: new PauseResumeController(),
+      onProgress: () => {},
+      target: {
+        kind: 'memory',
+        write: async (data) => { written.push(...data); },
+        close: async () => { closed = true; },
+        abort: async () => {},
+      },
+    });
+    expect(downloadProxyUrl(upstream)).toBe(`/api/proxy?url=${encodeURIComponent(upstream)}`);
+    expect(calls).toHaveLength(2);
+    expect(calls.every((url) => url.includes('/api/proxy?url='))).toBe(true);
+    expect(written).toEqual([1, 2, 3]);
+    expect(closed).toBe(true);
   });
 });

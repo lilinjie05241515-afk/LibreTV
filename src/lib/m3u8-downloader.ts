@@ -1,5 +1,6 @@
 import { parseM3u8Playlist, type ParsedPlaylist } from './m3u8-parse';
 import { StreamingTransmuxer } from './mp4-transmuxer';
+import { isProxiedUri, PROXY_BASE } from './m3u8';
 
 /**
  * 整集离线下载：
@@ -15,7 +16,7 @@ import { StreamingTransmuxer } from './mp4-transmuxer';
  */
 
 const DL_CACHE_NAME = 'libretv-dl-v1';
-const SEGMENT_TIMEOUT_MS = 20_000;
+const SEGMENT_TIMEOUT_MS = 45_000;
 const MAX_SEGMENT_RETRIES = 3;
 
 export class PauseResumeController {
@@ -80,6 +81,11 @@ async function fetchSegment(url: string, signal: AbortSignal): Promise<ArrayBuff
   const res = await fetch(url, { signal: AbortSignal.any([AbortSignal.timeout(SEGMENT_TIMEOUT_MS), signal]), headers: { Accept: '*/*' } });
   if (!res.ok) throw new Error(`分片 HTTP ${res.status}`);
   return res.arrayBuffer();
+}
+
+/** 下载统一经过同源代理，清单内的变体、密钥和分片由服务端逐级改写。 */
+export function downloadProxyUrl(url: string): string {
+  return isProxiedUri(url) ? url : `${PROXY_BASE}${encodeURIComponent(url)}`;
 }
 
 /**
@@ -150,7 +156,7 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      parsed = await parseM3u8Playlist(url, 0, undefined, { stripLeadAd: true });
+      parsed = await parseM3u8Playlist(downloadProxyUrl(url), 0, undefined, { stripLeadAd: true });
       lastErr = undefined;
       break;
     } catch (err) {
@@ -198,18 +204,20 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
       }
       const seg = parsed.segments[index - 1];
       let buffer: ArrayBuffer | undefined;
+      let segmentError: unknown;
       for (let retry = 0; retry < MAX_SEGMENT_RETRIES; retry++) {
         if (signal.aborted) return;
         try {
           buffer = await fetchSegment(seg.url, signal);
           break;
-        } catch {
+        } catch (err) {
+          segmentError = err;
           if (signal.aborted) return;
           await new Promise((r) => setTimeout(r, 1000 * (retry + 1)));
         }
       }
       if (!buffer) {
-        throw new Error(`分片 ${index} 下载失败（已重试 ${MAX_SEGMENT_RETRIES} 次）`);
+        throw new Error(`分片 ${index} 下载失败（已重试 ${MAX_SEGMENT_RETRIES} 次）：${segmentError instanceof Error ? segmentError.message : '网络错误'}`);
       }
       await cache.put(
         new Request(chunkKey(index)),

@@ -37,7 +37,8 @@ function memoryTarget(filename: string, confirmOverBytes = 500 * 1024 * 1024): S
   const flush = () => {
     if (done) return;
     done = true;
-    const blob = new Blob(chunks.map((c) => c.buffer as ArrayBuffer));
+    // mux.js 可能传入底层 ArrayBuffer 的子视图；只写视图实际覆盖的字节。
+    const blob = new Blob(chunks.map((c) => c.slice().buffer as ArrayBuffer));
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

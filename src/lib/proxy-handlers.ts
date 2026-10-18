@@ -96,8 +96,9 @@ export async function handleProxyRequest(req: Request, targetUrl: string): Promi
     try {
       const result = await fetchWithSafeRedirects(targetUrl, {
         headers,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+        // 下载分片可能持续超过请求头超时；响应流由客户端断开信号控制。
+        signal: req.signal,
+      }, { headerTimeoutMs: TIMEOUT_MS });
       response = result.res;
       finalUrl = result.finalUrl;
       lastError = null;
@@ -116,7 +117,7 @@ export async function handleProxyRequest(req: Request, targetUrl: string): Promi
   const contentType = response.headers.get('content-type') || '';
   const isM3u8 =
     contentType.includes('mpegurl') || contentType.includes('x-mpegurl') ||
-    targetUrl.toLowerCase().endsWith('.m3u8');
+    new URL(targetUrl).pathname.toLowerCase().endsWith('.m3u8');
 
   // m3u8 文本：重写为代理地址（以重定向后的最终 URL 为 base 解析相对地址）
   if (isM3u8) {
@@ -154,11 +155,7 @@ export async function handleProxyRequest(req: Request, targetUrl: string): Promi
 /**
  * 直播流专用长连接代理（不复用 /api/proxy）：
  *
- * /api/proxy 的 AbortSignal.timeout(TIMEOUT_MS) 作用于整个响应流，
- * 8 秒后即切断长连接——对 HTTP-FLV（单一无限长连接）是致命的。
- * 本路由改为「仅对响应头等待设超时」（fetchWithSafeRedirects 的
- * headerTimeoutMs）：fetch 拿到响应头后立即清除计时器，
- * 之后 body 无限时长流式透传，直到客户端断开。
+ * 直播请求也仅对响应头等待设超时，客户端断开后终止上游连接。
  *
  * - 不重试（重试对直播无意义）；
  * - m3u8 manifest 仍需重写（变体/分片地址改指本路由），FLV 等纯透传；
