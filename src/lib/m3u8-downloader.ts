@@ -1,6 +1,7 @@
 import { parseM3u8Playlist, type ParsedPlaylist } from './m3u8-parse';
 import { StreamingTransmuxer } from './mp4-transmuxer';
 import { isProxiedUri, PROXY_BASE } from './m3u8';
+import { notifyUnauthorized } from './client-api';
 
 /**
  * 整集离线下载：
@@ -18,6 +19,13 @@ import { isProxiedUri, PROXY_BASE } from './m3u8';
 const DL_CACHE_NAME = 'libretv-dl-v1';
 const SEGMENT_TIMEOUT_MS = 45_000;
 const MAX_SEGMENT_RETRIES = 3;
+
+export class DownloadAuthenticationError extends Error {
+  constructor() {
+    super('登录已失效，请重新登录后点击“继续”；已下载的分片会保留');
+    this.name = 'DownloadAuthenticationError';
+  }
+}
 
 export class PauseResumeController {
   private paused = false;
@@ -79,6 +87,9 @@ export async function clearDownloadChunks(taskId: string): Promise<void> {
 
 async function fetchSegment(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
   const res = await fetch(url, { signal: AbortSignal.any([AbortSignal.timeout(SEGMENT_TIMEOUT_MS), signal]), headers: { Accept: '*/*' } });
+  if (res.status === 401 && res.headers.get('X-LibreTV-Auth-Required') === '1') {
+    throw new DownloadAuthenticationError();
+  }
   if (!res.ok) throw new Error(`分片 HTTP ${res.status}`);
   return res.arrayBuffer();
 }
@@ -212,6 +223,10 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
           break;
         } catch (err) {
           segmentError = err;
+          if (err instanceof DownloadAuthenticationError) {
+            notifyUnauthorized();
+            throw err;
+          }
           if (signal.aborted) return;
           await new Promise((r) => setTimeout(r, 1000 * (retry + 1)));
         }

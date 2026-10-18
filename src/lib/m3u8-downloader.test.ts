@@ -134,4 +134,35 @@ describe('下载同源代理', () => {
     expect(written).toEqual([1, 2, 3]);
     expect(closed).toBe(true);
   });
+
+  it('分片代理返回站点鉴权 401 时立即停止重试并请求重新登录', async () => {
+    const playlist = '#EXTM3U\n#EXTINF:4,\n/api/proxy?url=https%3A%2F%2Fmedia.example.com%2Fpart.ts\n';
+    const fetchMock = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      return url.includes('index.m3u8')
+        ? new Response(playlist)
+        : new Response('未登录', { status: 401, headers: { 'X-LibreTV-Auth-Required': '1' } });
+    });
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('window', { dispatchEvent });
+    vi.stubGlobal('CustomEvent', class { constructor(public type: string) {} });
+    vi.stubGlobal('caches', {
+      open: async () => ({ match: async () => undefined, put: async () => {} }),
+    });
+
+    await expect(runDownloadJob({
+      taskId: 'expired-login',
+      url: 'https://media.example.com/index.m3u8',
+      title: 'test',
+      format: 'TS',
+      concurrency: 1,
+      signal: new AbortController().signal,
+      pause: new PauseResumeController(),
+      onProgress: () => {},
+      target: { kind: 'memory', write: async () => {}, close: async () => {}, abort: async () => {} },
+    })).rejects.toThrow('登录已失效');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(dispatchEvent).toHaveBeenCalledOnce();
+  });
 });

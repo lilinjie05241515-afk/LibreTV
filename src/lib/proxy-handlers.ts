@@ -70,7 +70,10 @@ export function decodePathTarget(encodedUrl: string): string {
  */
 export async function handleProxyRequest(req: Request, targetUrl: string): Promise<Response> {
   const guarded = guardRequest(req);
-  if (guarded && !looksLikeImageUrl(targetUrl)) return guarded;
+  if (guarded && !looksLikeImageUrl(targetUrl)) {
+    if (guarded.status === 401) guarded.headers.set('X-LibreTV-Auth-Required', '1');
+    return guarded;
+  }
 
   if (!isValidProxyUrl(targetUrl)) {
     return new NextResponse('无效的 URL', { status: 400 });

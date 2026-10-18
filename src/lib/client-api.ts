@@ -17,6 +17,10 @@ export class ApiError extends Error {
 
 const UNAUTHORIZED_EVENT = 'libretv:unauthorized';
 
+export function notifyUnauthorized(): void {
+  window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+}
+
 /** 单条测活结果（/api/live/probe，JSON 与 NDJSON 流共用同一结构） */
 export interface LiveProbeResult {
   url: string;
@@ -47,7 +51,7 @@ export function onUnauthorized(handler: (event: CustomEvent) => void): () => voi
 /** 401/503 统一处理：分发全局事件打开登录框并抛 ApiError（普通与流式请求共用） */
 function throwForAuthStatus(res: Response): void {
   if (res.status === 401) {
-    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    notifyUnauthorized();
     throw new ApiError('需要登录', 401);
   }
   if (res.status === 503) {

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeAccountDb } from './account-db';
 import { ACCOUNT_COOKIE, authenticate, bootstrapAdmin, createInvites, createPasswordReset, createSession, hasAdmin, listInvites, listUsers, registerUser, resetPassword, revokeInvite, revokeSession, sessionUser, setUserStatus } from './account-service';
 import { guardRequest } from './api-guard';
+import { handleProxyRequest } from './proxy-handlers';
 import { POST as legacyLogin } from '@/app/api/auth/route';
 import { POST as registerRoute } from '@/app/api/account/register/route';
 import { GET as adminInvitesRoute } from '@/app/api/admin/invites/route';
@@ -69,6 +70,12 @@ describe('invite-only account lifecycle', () => {
   it('rejects old shared-password sessions and revokes individual sessions', async () => {
     const old = new Request('https://local.test/api/search', { headers: { cookie: 'ltv_session=any-value' } });
     expect(guardRequest(old)?.status).toBe(401);
+    const deniedSegment = await handleProxyRequest(
+      new Request('https://local.test/api/proxy?url=https%3A%2F%2Fmedia.example.com%2Fpart.ts'),
+      'https://media.example.com/part.ts'
+    );
+    expect(deniedSegment.status).toBe(401);
+    expect(deniedSegment.headers.get('X-LibreTV-Auth-Required')).toBe('1');
     const legacy = await legacyLogin(new Request('https://local.test/api/auth', { method: 'POST', body: JSON.stringify({ password: 'old-shared-password' }) }));
     expect(legacy.status).toBe(410);
     const { token } = createSession(aliceId);
